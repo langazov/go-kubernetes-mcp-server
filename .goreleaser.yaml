@@ -1,0 +1,106 @@
+version: 2
+
+project_name: k8s-mcp-server
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: k8s-mcp-server
+    main: ./cmd/k8s-mcp-server
+    binary: k8s-mcp-server
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    targets:
+      - linux_amd64
+      - linux_arm64
+      - darwin_amd64
+      - darwin_arm64
+      - windows_amd64
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- title .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+      - deploy/*
+
+dockers:
+  - id: linux-amd64
+    goos: linux
+    goarch: amd64
+    ids: [k8s-mcp-server]
+    image_templates:
+      - "ghcr.io/langazov/k8s-mcp-server:{{ .Version }}-amd64"
+      - "ghcr.io/langazov/k8s-mcp-server:latest-amd64"
+    dockerfile: deploy/Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+  - id: linux-arm64
+    goos: linux
+    goarch: arm64
+    ids: [k8s-mcp-server]
+    image_templates:
+      - "ghcr.io/langazov/k8s-mcp-server:{{ .Version }}-arm64"
+      - "ghcr.io/langazov/k8s-mcp-server:latest-arm64"
+    dockerfile: deploy/Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+
+docker_manifests:
+  - name_template: "ghcr.io/langazov/k8s-mcp-server:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/langazov/k8s-mcp-server:{{ .Version }}-amd64"
+      - "ghcr.io/langazov/k8s-mcp-server:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/langazov/k8s-mcp-server:latest"
+    image_templates:
+      - "ghcr.io/langazov/k8s-mcp-server:latest-amd64"
+      - "ghcr.io/langazov/k8s-mcp-server:latest-arm64"
+
+sboms:
+  - id: k8s-mcp-server
+    artifacts: archive
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  github:
+    owner: langazov
+    name: go-kubernetes-mcp-server
+  draft: false
+  prerelease: auto

@@ -1,0 +1,102 @@
+package tools
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+// resolveList returns the effective namespace string ("" for all namespaces)
+// and metav1.ListOptions for a ListArgs. When AllNamespaces is true the
+// namespace is "" (lists across the cluster).
+func ResolveList(a ListArgs) (string, metav1.ListOptions, error) {
+	if err := validateSelector(a.Selector); err != nil {
+		return "", metav1.ListOptions{}, err
+	}
+	ns := ""
+	if !a.AllNamespaces {
+		ns = ResolveNS(a.Namespace)
+	}
+	opts := metav1.ListOptions{
+		LabelSelector:   a.Selector,
+		FieldSelector:   a.FieldSelector,
+		ResourceVersion: "",
+	}
+	if a.Limit > 0 {
+		opts.Limit = a.Limit
+	}
+	return ns, opts, nil
+}
+
+func validateSelector(sel string) error {
+	if strings.ContainsAny(sel, "\n\r") {
+		return fmt.Errorf("invalid selector: must not contain newlines")
+	}
+	return nil
+}
+
+// ResolveNS returns the namespace to use for a namespaced operation, defaulting
+// to "default" when empty. For list-across-namespaces, handle that at the call
+// site (pass "" explicitly).
+func ResolveNS(ns string) string {
+	if ns == "" {
+		return "default"
+	}
+	return ns
+}
+
+// ageStr renders the elapsed time since a creation timestamp as a kubectl-style
+// age (e.g. "5m", "3d", "2h").
+func AgeStr(t metav1.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return shortDuration(time.Since(t.Time))
+}
+
+func ageStrTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return shortDuration(time.Since(t))
+}
+
+func shortDuration(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
+}
+
+// truncLen shortens a string to n runes with an ellipsis.
+func TruncLen(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
+}
+
+// fmtTime renders a metav1.Time as RFC3339, or "" if zero.
+func fmtTime(t metav1.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Time.Format(time.RFC3339)
+}
+
+// ptr returns the string value behind a *string, or "".
+func ptrStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}

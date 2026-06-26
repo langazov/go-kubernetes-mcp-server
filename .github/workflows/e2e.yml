@@ -1,0 +1,80 @@
+name: e2e
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 4 * * *" # nightly
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        k8s: ["v1.29.0", "v1.32.0"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+
+      - name: Build server binary
+        run: go build -o /tmp/k8s-mcp-server ./cmd/k8s-mcp-server
+
+      - name: Create kind cluster (${{ matrix.k8s }})
+        uses: helm/kind-action@v1
+        with:
+          version: v0.24.0
+          node_image: kindest/node:${{ matrix.k8s }}
+          wait: 120s
+
+      - name: Seed test workload
+        run: |
+          kubectl create ns e2e
+          kubectl -n e2e create deployment demo --image=nginx:1.27 --replicas=2
+          kubectl -n e2e rollout status deployment/demo --timeout=120s
+
+      - name: Drive MCP server over stdio (read-only)
+        env:
+          KUBECONFIG: /home/runner/.kube/config
+        run: |
+          set -e
+          handshake='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"e2e","version":"0"}}}
+          {"jsonrpc":"2.0","method":"notifications/initialized"}
+          {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+          {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_pods","arguments":{"namespace":"e2e"}}}
+          {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"diagnose_pod","arguments":{"namespace":"e2e","name":"demo"}}}'
+          out=$(printf '%s\n' "$handshake" | /tmp/k8s-mcp-server --log-level error 2>/dev/null)
+          echo "$out" | grep -q '"id":2"' || (echo "no tools/list response"; exit 1)
+          echo "$out" | grep '"id":3"' | grep -q "demo" || (echo "pods not listed"; exit 1)
+          echo "e2e read-only OK"
+
+      - name: Drive MCP server (writes, dry-run safe)
+        env:
+          KUBECONFIG: /home/runner/.kube/config
+        run: |
+          set -e
+          body='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"e2e","version":"0"}}}
+          {"jsonrpc":"2.0","method":"notifications/initialized"}
+          {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"apply_manifest","arguments":{"manifest":"apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: e2e-cm\n  namespace: e2e\ndata:\n  ok: \"yes\"","dry_run":false}}}
+          {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"scale","arguments":{"kind":"Deployment","namespace":"e2e","name":"demo","replicas":3}}}'
+          out=$(printf '%s\n' "$body" | /tmp/k8s-mcp-server --log-level error --allow-writes 2>/dev/null)
+          echo "$out" | grep '"id":2"' | grep -q "applied" || (echo "apply failed"; echo "$out"; exit 1)
+          kubectl -n e2e get configmap e2e-cm
+          kubectl -n e2e get deploy demo -o jsonpath='{.spec.replicas}' | grep -q 3 || (echo "scale failed"; exit 1)
+          echo "e2e writes OK"
+
+      - name: Dump diagnostics on failure
+        if: failure()
+        run: |
+          echo "=== cluster state ==="
+          kubectl get pods -A || true
+          kubectl get events -A --sort-by=.lastTimestamp | tail -30 || true

@@ -1,0 +1,135 @@
+# In-cluster deployment for the Kubernetes MCP server over the HTTP transport.
+#
+# Two RBAC modes are provided:
+#   * read-only (default): safe; the server cannot mutate the cluster.
+#   * admin: uncomment to enable --allow-writes / --allow-destructive.
+#
+# Connect a remote MCP client to http://<service>.<namespace>.svc:8080/mcp.
+# For production, front this with an auth layer (mTLS, OAuth proxy, etc.).
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-mcp-server
+  namespace: default
+---
+# Read-only cluster role (default). Grants get/list/watch on all resources.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-mcp-server-readonly
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/healthz", "/version"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-mcp-server-readonly
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: k8s-mcp-server-readonly
+subjects:
+  - kind: ServiceAccount
+    name: k8s-mcp-server
+    namespace: default
+---
+# Optional: admin role to enable mutating/destructive tools.
+# Uncomment AND start the Deployment with --allow-writes / --allow-destructive.
+#
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRole
+# metadata:
+#   name: k8s-mcp-server-admin
+# rules:
+#   - apiGroups: ["*"]
+#     resources: ["*"]
+#     verbs: ["*"]
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRoleBinding
+# metadata:
+#   name: k8s-mcp-server-admin
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: ClusterRole
+#   name: k8s-mcp-server-admin
+# subjects:
+#   - kind: ServiceAccount
+#     name: k8s-mcp-server
+#     namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-mcp-server
+  namespace: default
+  labels:
+    app.kubernetes.io/name: k8s-mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: k8s-mcp-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: k8s-mcp-server
+    spec:
+      serviceAccountName: k8s-mcp-server
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          image: ghcr.io/langazov/k8s-mcp-server:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --transport=http
+            - --listen=:8080
+            - --endpoint=/mcp
+            - --log-level=info
+            # Mutating/destructive/debug tools are OFF by default.
+            # Enable individually after binding an admin ClusterRole above:
+            # - --allow-writes
+            # - --allow-destructive
+            # - --allow-debug
+          ports:
+            - name: mcp
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: mcp
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: mcp
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8s-mcp-server
+  namespace: default
+spec:
+  selector:
+    app.kubernetes.io/name: k8s-mcp-server
+  ports:
+    - name: mcp
+      port: 8080
+      targetPort: mcp
