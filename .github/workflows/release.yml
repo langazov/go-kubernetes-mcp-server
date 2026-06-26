@@ -19,8 +19,21 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.26.4"
           cache: true
+
+      - name: Verify (vet + build + test)
+        run: |
+          go vet ./...
+          go build ./...
+          go test ./...
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: anchore/sbom-action/download-syft@v0
         with:
@@ -28,7 +41,8 @@ jobs:
 
       - uses: goreleaser/goreleaser-action@v6
         with:
-          version: v2.4.8
+          version: v2.16.0
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
