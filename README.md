@@ -46,15 +46,14 @@ debug tools are not even registered unless you pass the corresponding flag.
 
 ## Install
 
-```bash
-go install github.com/langazov/go-kubernetes-mcp-server/cmd/k8s-mcp-server@latest
-```
-
-or build from source:
+**Homebrew** (macOS & Linux):
 
 ```bash
-go build -o k8s-mcp-server ./cmd/k8s-mcp-server
+brew install --cask langazov/tap/k8s-mcp-server
 ```
+
+Pre-built binaries, the Docker image, `go install`, building from source, and
+in-cluster deployment are covered in the **[Installation guide](INSTALL.md)**.
 
 ## Quick start (stdio)
 
