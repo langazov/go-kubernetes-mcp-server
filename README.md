@@ -55,6 +55,13 @@ brew install --cask langazov/tap/k8s-mcp-server
 Pre-built binaries, the Docker image, `go install`, building from source, and
 in-cluster deployment are covered in the **[Installation guide](INSTALL.md)**.
 
+Prefer a guided setup? Run the **interactive wizard** — it picks your AI client
+and configures the start options for you:
+
+```bash
+./scripts/install-wizard.sh
+```
+
 ## Quick start (stdio)
 
 ```bash

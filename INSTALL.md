@@ -4,6 +4,21 @@ Choose one of the methods below, then point an MCP client at the `k8s-mcp-server
 binary. See the [client configuration](README.md#client-configuration) section for
 how to wire it into Claude Desktop, Cursor, opencode, and others.
 
+## Interactive setup wizard
+
+The fastest path — picks an agent, toggles start options from a menu, and writes
+the config for you:
+
+```bash
+./scripts/install-wizard.sh
+```
+
+It covers OpenCode, Claude Desktop, Claude Code, Cursor, and the HTTP server;
+lets you toggle `--allow-writes` / `--allow-destructive` / `--allow-debug` /
+`--allow-privileged-targets` / `--reveal-secrets` and namespace restrictions;
+and merges into the right config file (backing up the existing one). The rest of
+this document covers the manual methods.
+
 ## Homebrew (macOS & Linux)
 
 ```bash
