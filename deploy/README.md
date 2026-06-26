@@ -6,6 +6,7 @@ MCP clients (or an agent gateway) can share it.
 ## Quick start (read-only)
 
 ```bash
+CGO_ENABLED=0 go build -trimpath -o k8s-mcp-server ./cmd/k8s-mcp-server
 docker build -t ghcr.io/langazov/k8s-mcp-server:latest -f deploy/Dockerfile .
 kubectl apply -f deploy/deployment.yaml
 ```
