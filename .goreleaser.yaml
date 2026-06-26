@@ -81,22 +81,20 @@ docker_manifests:
       - "ghcr.io/langazov/k8s-mcp-server:latest-amd64"
       - "ghcr.io/langazov/k8s-mcp-server:latest-arm64"
 
-brews:
+homebrew_casks:
   - name: k8s-mcp-server
     homepage: https://github.com/langazov/go-kubernetes-mcp-server
     description: "Model Context Protocol server that exposes a Kubernetes cluster to AI agents: manage resources, troubleshoot problems, and debug applications."
     license: MIT
-    directory: Formula
-    commit_msg_template: "Brew formula update for {{ .ProjectName }} {{ .Tag }}"
+    binaries:
+      - k8s-mcp-server
+    directory: Casks
+    commit_msg_template: "Brew cask update for {{ .ProjectName }} {{ .Tag }}"
     repository:
       owner: langazov
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    install: |
-      bin.install "k8s-mcp-server"
-    test: |
-      system "#{bin}/k8s-mcp-server", "--help"
 
 sboms:
   - id: k8s-mcp-server
