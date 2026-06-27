@@ -114,7 +114,7 @@ func describeContainer(b *strings.Builder, c corev1.Container, cs *corev1.Contai
 		fmt.Fprintf(b, "    Restarts:   %d\n", cs.RestartCount)
 	}
 	if len(c.Ports) > 0 {
-		var ports []string
+		ports := make([]string, 0, len(c.Ports))
 		for _, p := range c.Ports {
 			ports = append(ports, fmt.Sprintf("%d/%s", p.ContainerPort, p.Protocol))
 		}

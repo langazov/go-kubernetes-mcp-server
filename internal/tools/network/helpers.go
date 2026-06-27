@@ -39,7 +39,7 @@ func renderEndpointSlices(svc, ns string, items []unstructured.Unstructured) str
 	for _, us := range items {
 		eps, _ := us.Object["endpoints"].([]any)
 		portVals, _ := us.Object["ports"].([]any)
-		var ports []string
+		ports := make([]string, 0, len(portVals))
 		for _, p := range portVals {
 			pm, _ := p.(map[string]any)
 			port := pm["port"]

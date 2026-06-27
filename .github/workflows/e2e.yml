@@ -56,8 +56,8 @@ jobs:
           # flushes responses before the pipe closes (the stdio transport tears
           # down on EOF).
           out=$( (printf '%s\n' "$handshake"; sleep 3) | /tmp/k8s-mcp-server --log-level error 2>/dev/null)
-          echo "$out" | grep -q '"id":2"' || (echo "no tools/list response"; echo "$out"; exit 1)
-          echo "$out" | grep '"id":3"' | grep -q "demo" || (echo "pods not listed"; echo "$out"; exit 1)
+          echo "$out" | grep -q '"id":2' || (echo "no tools/list response"; echo "$out"; exit 1)
+          echo "$out" | grep '"id":3' | grep -q "demo" || (echo "pods not listed"; echo "$out"; exit 1)
           echo "e2e read-only OK"
 
       - name: Drive MCP server (writes, dry-run safe)
@@ -70,7 +70,7 @@ jobs:
           {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"apply_manifest","arguments":{"manifest":"apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: e2e-cm\n  namespace: e2e\ndata:\n  ok: \"yes\"","dry_run":false}}}
           {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"scale","arguments":{"kind":"Deployment","namespace":"e2e","name":"demo","replicas":3}}}'
           out=$( (printf '%s\n' "$body"; sleep 3) | /tmp/k8s-mcp-server --log-level error --allow-writes 2>/dev/null)
-          echo "$out" | grep '"id":2"' | grep -q "applied" || (echo "apply failed"; echo "$out"; exit 1)
+          echo "$out" | grep '"id":2' | grep -q "applied" || (echo "apply failed"; echo "$out"; exit 1)
           kubectl -n e2e get configmap e2e-cm
           kubectl -n e2e get deploy demo -o jsonpath='{.spec.replicas}' | grep -q 3 || (echo "scale failed"; exit 1)
           echo "e2e writes OK"
