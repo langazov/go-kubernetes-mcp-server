@@ -89,3 +89,71 @@ func TestManifestKindAllowlist(t *testing.T) {
 		t.Error("non-allowed kind should be rejected")
 	}
 }
+
+func TestForbiddenImage(t *testing.T) {
+	p := fromDefaults(t, func(c *config.Config) {
+		c.ForbiddenImages = []string{"evil:latest"}
+	})
+	if err := p.CheckImage("evil:latest"); err == nil {
+		t.Error("forbidden image must be rejected")
+	}
+	if err := p.CheckImage("nginx:1.2.3"); err != nil {
+		t.Errorf("allowed image rejected: %v", err)
+	}
+	if err := fromDefaults(t, nil).CheckImage("evil:latest"); err != nil {
+		t.Errorf("empty forbidden list should allow all images: %v", err)
+	}
+}
+
+func TestCheckDebugBlockedByDefault(t *testing.T) {
+	p := fromDefaults(t, nil)
+	if p.CanDebug() {
+		t.Fatal("read-only policy must not enable debug")
+	}
+	if err := p.CheckDebug(); err == nil {
+		t.Error("CheckDebug should error without --allow-debug")
+	}
+	debug := fromDefaults(t, func(c *config.Config) { c.AllowDebug = true })
+	if !debug.CanDebug() {
+		t.Error("CanDebug should be true with the flag")
+	}
+	if err := debug.CheckDebug(); err != nil {
+		t.Errorf("CheckDebug should pass with the flag: %v", err)
+	}
+}
+
+func TestCheckDebugServiceAccountDefaultOnly(t *testing.T) {
+	p := fromDefaults(t, nil) // no allowlist configured
+	if err := p.CheckDebugServiceAccount("default"); err != nil {
+		t.Errorf("default SA should be permitted: %v", err)
+	}
+	if err := p.CheckDebugServiceAccount(""); err != nil {
+		t.Errorf("empty SA should resolve to default and be permitted: %v", err)
+	}
+	if err := p.CheckDebugServiceAccount("cluster-admin"); err == nil {
+		t.Error("non-default SA must be rejected without an allowlist")
+	}
+}
+
+func TestCheckDebugServiceAccountAllowlist(t *testing.T) {
+	p := fromDefaults(t, func(c *config.Config) {
+		c.AllowedDebugServiceAccounts = []string{"toolbox", "diag"}
+	})
+	for _, sa := range []string{"toolbox", "diag"} {
+		if err := p.CheckDebugServiceAccount(sa); err != nil {
+			t.Errorf("%q is allowlisted, should pass: %v", sa, err)
+		}
+	}
+	for _, sa := range []string{"default", "cluster-admin"} {
+		if err := p.CheckDebugServiceAccount(sa); err == nil {
+			t.Errorf("%q is not in the allowlist, should be rejected", sa)
+		}
+	}
+}
+
+func TestFromConfigImpliesWritesFromDestructive(t *testing.T) {
+	p := fromDefaults(t, func(c *config.Config) { c.AllowDestructive = true })
+	if !p.CanDestroy() || !p.CanMutate() {
+		t.Error("AllowDestructive should imply AllowWrites in the built policy")
+	}
+}
