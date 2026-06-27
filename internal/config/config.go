@@ -1,3 +1,5 @@
+// Package config holds server configuration: the Config struct, flag and
+// environment-variable binding, defaults, and validation.
 package config
 
 import (

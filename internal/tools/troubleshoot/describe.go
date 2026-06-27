@@ -75,7 +75,7 @@ func describe(tk *tools.Toolkit) tools.ToolFunc[describeArgs] {
 
 // resolveGVR finds the GroupVersionResource for a kind using discovery. It scans
 // all API resources; if apiVersion is given it restricts to that group/version.
-func resolveGVR(ctx context.Context, tk *tools.Toolkit, kind, apiVersion string) (schema.GroupVersionResource, bool, error) {
+func resolveGVR(_ context.Context, tk *tools.Toolkit, kind, apiVersion string) (schema.GroupVersionResource, bool, error) {
 	_, lists, err := tk.Clients.Discovery.ServerGroupsAndResources()
 	if err != nil && len(lists) == 0 {
 		return schema.GroupVersionResource{}, false, fmt.Errorf("discovery failed: %w", err)

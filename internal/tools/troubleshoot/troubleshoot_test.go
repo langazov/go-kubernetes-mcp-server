@@ -21,7 +21,7 @@ func TestGetLogs(t *testing.T) {
 	// The fake clientset's GetLogs returns an empty stream by default, so the
 	// handler produces "(no logs found)".
 	cs := testutil.ClientsFor(tk).Typed
-	cs.PrependReactor("get", "pods/log", func(action k8stesting.Action) (bool, runtime.Object, error) {
+	cs.PrependReactor("get", "pods/log", func(_ k8stesting.Action) (bool, runtime.Object, error) {
 		return true, &runtime.Unknown{Raw: []byte("line1\nline2\n")}, nil
 	})
 	res, err := getLogs(tk)(context.Background(), logArgs{Pod: "app", Namespace: "default"})

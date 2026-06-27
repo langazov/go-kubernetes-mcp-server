@@ -63,8 +63,8 @@ func describeNodeObject(n *corev1.Node) string {
 	ac := rpc.NewTable("RESOURCE", "CAPACITY", "ALLOCATABLE")
 	keys := sortedKeys(mergeKeys(n.Status.Capacity, n.Status.Allocatable))
 	for _, k := range keys {
-		cap, alc := n.Status.Capacity[k], n.Status.Allocatable[k]
-		ac.AddRow(string(k), cap.String(), alc.String())
+		capStr, alc := n.Status.Capacity[k], n.Status.Allocatable[k]
+		ac.AddRow(string(k), capStr.String(), alc.String())
 	}
 	b.WriteString(ac.Render())
 	return b.String()
@@ -132,13 +132,6 @@ func nodeInternalIP(n *corev1.Node) string {
 		}
 	}
 	return "<none>"
-}
-
-func ptrStr(p *string) string {
-	if p == nil {
-		return "<none>"
-	}
-	return *p
 }
 
 func formatMap(m map[string]string) string {

@@ -178,7 +178,7 @@ func portsStr(s corev1.Service) string {
 	return strings.Join(parts, ",")
 }
 
-func describeService(s *corev1.Service, ep *corev1.Endpoints) string {
+func describeService(s *corev1.Service, ep *corev1.Endpoints) string { //nolint:staticcheck // intentional Endpoints fallback for older clusters
 	var b strings.Builder
 	fmt.Fprintf(&b, "Name:              %s\n", s.Name)
 	fmt.Fprintf(&b, "Namespace:         %s\n", s.Namespace)
@@ -207,7 +207,7 @@ func describeService(s *corev1.Service, ep *corev1.Endpoints) string {
 	return b.String()
 }
 
-func renderEndpoints(ep *corev1.Endpoints) string {
+func renderEndpoints(ep *corev1.Endpoints) string { //nolint:staticcheck // intentional Endpoints fallback for older clusters
 	if ep == nil {
 		return "No endpoints found.\n"
 	}

@@ -86,10 +86,10 @@ func describeDeployment(d *appsv1.Deployment) string {
 var _ metav1.Time // keep import if temporarily unused
 
 func truncateMsg(s string) string {
-	const max = 80
+	const maxLen = 80
 	r := []rune(s)
-	if len(r) <= max {
+	if len(r) <= maxLen {
 		return s
 	}
-	return string(r[:max]) + "…"
+	return string(r[:maxLen]) + "…"
 }

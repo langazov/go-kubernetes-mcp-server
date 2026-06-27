@@ -317,11 +317,7 @@ func metaPatcher(tk *tools.Toolkit, action, field string) tools.ToolFunc[metaPat
 		if gerr != nil {
 			return nil, tools.RPCStatusError(gerr, fmt.Sprintf("get %s %s/%s", a.Kind, ns, a.Name))
 		}
-		cur := map[string]string{}
-		if v, ok := existing.GetAnnotations()[field]; ok {
-			_ = v
-		}
-		cur = existing.GetLabels()
+		cur := existing.GetLabels()
 		if field == "annotations" {
 			cur = existing.GetAnnotations()
 		}

@@ -57,6 +57,8 @@ func FromConfig(cfg config.Config) *Policy {
 // Verb classifies a tool call for auditing.
 type Verb string
 
+// VerbRead, VerbWrite, VerbDestructive, and VerbDebug classify a tool call by
+// its effect for auditing and gating.
 const (
 	VerbRead        Verb = "read"
 	VerbWrite       Verb = "write"

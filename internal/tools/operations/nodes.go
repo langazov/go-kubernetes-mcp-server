@@ -31,7 +31,7 @@ func cordonNode(tk *tools.Toolkit) tools.ToolFunc[nodeNameArgs] {
 	return setNodeUnschedulable(tk, "cordon_node", true)
 }
 
-func setNodeUnschedulable(tk *tools.Toolkit, name string, unschedulable bool) tools.ToolFunc[nodeNameArgs] {
+func setNodeUnschedulable(tk *tools.Toolkit, _ string, unschedulable bool) tools.ToolFunc[nodeNameArgs] {
 	verb := "cordon"
 	if !unschedulable {
 		verb = "uncordon"
@@ -92,9 +92,6 @@ func drainNode(tk *tools.Toolkit) tools.ToolFunc[drainArgs] {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, timeout)
 			defer cancel()
-		}
-		if a.IgnoreDaemonSets {
-			// already default true; flag accepted for kubectl parity
 		}
 
 		// 1. Cordon.

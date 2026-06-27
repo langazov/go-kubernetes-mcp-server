@@ -280,7 +280,7 @@ func tailLogs(ctx context.Context, tk *tools.Toolkit, ns, pod, container string,
 	if err != nil {
 		return ""
 	}
-	defer stream.Close()
+	defer func() { _ = stream.Close() }()
 	b, _ := io.ReadAll(stream)
 	out := strings.TrimRight(string(b), "\n")
 	if len(out) > 2048 {

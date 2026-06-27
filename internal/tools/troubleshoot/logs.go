@@ -84,7 +84,7 @@ func getLogs(tk *tools.Toolkit) tools.ToolFunc[logArgs] {
 		if err != nil {
 			return nil, tools.RPCStatusError(err, fmt.Sprintf("get logs for pod %s/%s", ns, a.Pod))
 		}
-		defer stream.Close()
+		defer func() { _ = stream.Close() }()
 
 		// Cap how much we buffer to protect context windows; truncation also
 		// applies via Wrap, but bounding the read avoids unbounded memory.
@@ -104,10 +104,10 @@ func getLogs(tk *tools.Toolkit) tools.ToolFunc[logArgs] {
 
 var errHitLimit = fmt.Errorf("read hit byte limit")
 
-func readAtMost(r io.Reader, max int64) ([]byte, error) {
+func readAtMost(r io.Reader, maxBytes int64) ([]byte, error) {
 	var out []byte
 	buf := make([]byte, 32*1024)
-	for int64(len(out)) < max {
+	for int64(len(out)) < maxBytes {
 		n, err := r.Read(buf)
 		if n > 0 {
 			out = append(out, buf[:n]...)

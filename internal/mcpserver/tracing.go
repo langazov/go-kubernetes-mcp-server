@@ -13,7 +13,7 @@ import (
 // OTelMiddleware returns an MCP receiving middleware that wraps each method
 // handler in an OpenTelemetry span. The tool/call method additionally records
 // the tool name and whether it errored.
-func OTelMiddleware(tracer trace.Tracer, log *slog.Logger) mcp.Middleware {
+func OTelMiddleware(tracer trace.Tracer, _ *slog.Logger) mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			ctx, span := tracer.Start(ctx, spanName(method),

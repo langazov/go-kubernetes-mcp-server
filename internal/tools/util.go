@@ -8,7 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// resolveList returns the effective namespace string ("" for all namespaces)
+// ResolveList returns the effective namespace string ("" for all namespaces)
 // and metav1.ListOptions for a ListArgs. When AllNamespaces is true the
 // namespace is "" (lists across the cluster).
 func ResolveList(a ListArgs) (string, metav1.ListOptions, error) {
@@ -85,20 +85,13 @@ func ResolveNS(ns string) string {
 	return ns
 }
 
-// ageStr renders the elapsed time since a creation timestamp as a kubectl-style
+// AgeStr renders the elapsed time since a creation timestamp as a kubectl-style
 // age (e.g. "5m", "3d", "2h").
 func AgeStr(t metav1.Time) string {
 	if t.IsZero() {
 		return ""
 	}
 	return shortDuration(time.Since(t.Time))
-}
-
-func ageStrTime(t time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	return shortDuration(time.Since(t))
 }
 
 func shortDuration(d time.Duration) string {
@@ -114,27 +107,11 @@ func shortDuration(d time.Duration) string {
 	}
 }
 
-// truncLen shortens a string to n runes with an ellipsis.
+// TruncLen shortens a string to n runes with an ellipsis.
 func TruncLen(s string, n int) string {
 	r := []rune(s)
 	if len(r) <= n {
 		return s
 	}
 	return string(r[:n]) + "…"
-}
-
-// fmtTime renders a metav1.Time as RFC3339, or "" if zero.
-func fmtTime(t metav1.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	return t.Time.Format(time.RFC3339)
-}
-
-// ptr returns the string value behind a *string, or "".
-func ptrStr(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
 }

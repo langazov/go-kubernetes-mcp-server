@@ -12,7 +12,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
@@ -314,17 +313,4 @@ func decodeManifests(raw string) ([]unstructured.Unstructured, error) {
 		out = append(out, obj)
 	}
 	return out, nil
-}
-
-// gvrOf is a small wrapper for mutating tools that already validated args.
-func gvrOf(ctx context.Context, tk *tools.Toolkit, kind, apiVersion, ns string) (schema.GroupVersionResource, bool, string, error) {
-	gvr, namespaced, err := tools.ResolveGVR(ctx, tk, kind, apiVersion)
-	if err != nil {
-		return schema.GroupVersionResource{}, false, "", err
-	}
-	resolved := ns
-	if namespaced {
-		resolved = tools.ResolveNS(ns)
-	}
-	return gvr, namespaced, resolved, nil
 }

@@ -9,10 +9,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -105,9 +108,25 @@ func run(cmd *cobra.Command, _ []string) error {
 	defer stop()
 
 	if err := app.Run(ctx); err != nil {
+		if isGracefulClose(err) {
+			logger.Info("client disconnected; server stopped")
+			return nil
+		}
 		logger.Error("server exited with error", "error", err)
 		return err
 	}
 	logger.Info("server stopped")
 	return nil
+}
+
+// isGracefulClose reports whether the error represents a clean client
+// disconnect over stdio (stdin EOF) or shutdown, which is normal and must not
+// be surfaced as a failure (e.g. in CI / e2e that drives the server over a
+// closed pipe).
+func isGracefulClose(err error) bool {
+	if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "server is closing") || strings.Contains(msg, "EOF")
 }

@@ -137,19 +137,19 @@ func listPVCs(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 		}
 		t := rpc.NewTable("NAMESPACE", "NAME", "STATUS", "CAPACITY", "ACCESS MODES", "STORAGECLASS", "VOLUME", "AGE")
 		for _, p := range list.Items {
-			cap, acc := "<pending>", "<pending>"
+			capStr := "<pending>"
 			if p.Spec.Resources.Requests.Storage() != nil {
-				cap = p.Spec.Resources.Requests.Storage().String()
+				capStr = p.Spec.Resources.Requests.Storage().String()
 			}
 			if p.Status.Capacity.Storage() != nil && !p.Status.Capacity.Storage().IsZero() {
-				cap = p.Status.Capacity.Storage().String()
+				capStr = p.Status.Capacity.Storage().String()
 			}
-			acc = accessModesStr(p.Spec.AccessModes)
+			acc := accessModesStr(p.Spec.AccessModes)
 			sc := "<none>"
 			if p.Spec.StorageClassName != nil {
 				sc = *p.Spec.StorageClassName
 			}
-			t.AddRow(p.Namespace, p.Name, string(p.Status.Phase), cap, acc, sc, p.Spec.VolumeName, tools.AgeStr(p.CreationTimestamp))
+			t.AddRow(p.Namespace, p.Name, string(p.Status.Phase), capStr, acc, sc, p.Spec.VolumeName, tools.AgeStr(p.CreationTimestamp))
 		}
 		return rpc.TextResult(t.Render()), nil
 	}

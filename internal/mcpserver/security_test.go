@@ -44,7 +44,7 @@ func toolNames(t *testing.T, cfg config.Config) []string {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	res, err := session.ListTools(ctx, nil)
 	if err != nil {

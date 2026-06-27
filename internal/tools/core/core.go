@@ -137,7 +137,7 @@ func describeNode(tk *tools.Toolkit) tools.ToolFunc[tools.NamespaceNameArgs] {
 }
 
 func getAPIResources(tk *tools.Toolkit) tools.ToolFunc[apiResourceArgs] {
-	return func(ctx context.Context, a apiResourceArgs) (*mcp.CallToolResult, error) {
+	return func(_ context.Context, a apiResourceArgs) (*mcp.CallToolResult, error) {
 		groups, lists, err := tk.Clients.Discovery.ServerGroupsAndResources()
 		// Discovery can return partial results with a non-nil error; surface a
 		// note but keep going if we got anything.

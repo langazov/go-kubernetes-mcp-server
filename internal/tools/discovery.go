@@ -12,7 +12,7 @@ import (
 // ResolveGVR finds the GroupVersionResource (and namespaced flag) for a kind
 // using discovery. If apiVersion is given ("group/version" or "v1") it
 // restricts the search to that group/version. Returns an error if not found.
-func ResolveGVR(ctx context.Context, tk *Toolkit, kind, apiVersion string) (schema.GroupVersionResource, bool, error) {
+func ResolveGVR(_ context.Context, tk *Toolkit, kind, apiVersion string) (schema.GroupVersionResource, bool, error) {
 	_, lists, err := tk.Clients.Discovery.ServerGroupsAndResources()
 	if err != nil && len(lists) == 0 {
 		return schema.GroupVersionResource{}, false, fmt.Errorf("discovery failed: %w", err)

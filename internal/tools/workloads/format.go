@@ -102,11 +102,12 @@ func describeContainer(b *strings.Builder, c corev1.Container, cs *corev1.Contai
 	fmt.Fprintf(b, "  %s:\n", c.Name)
 	fmt.Fprintf(b, "    Image:      %s\n", c.Image)
 	if cs != nil {
-		if cs.State.Running != nil {
+		switch {
+		case cs.State.Running != nil:
 			fmt.Fprintf(b, "    State:      Running (since %s)\n", cs.State.Running.StartedAt)
-		} else if cs.State.Waiting != nil {
+		case cs.State.Waiting != nil:
 			fmt.Fprintf(b, "    State:      Waiting (%s) — %s\n", cs.State.Waiting.Reason, tools.TruncLen(cs.State.Waiting.Message, 80))
-		} else if cs.State.Terminated != nil {
+		case cs.State.Terminated != nil:
 			fmt.Fprintf(b, "    State:      Terminated (%s) exit %d — %s\n", cs.State.Terminated.Reason, cs.State.Terminated.ExitCode, tools.TruncLen(cs.State.Terminated.Message, 80))
 		}
 		fmt.Fprintf(b, "    Ready:      %t\n", cs.Ready)
@@ -183,15 +184,6 @@ func jobStatus(j batchv1.Job) string {
 		return "Suspended"
 	}
 	return "Pending"
-}
-
-// cronJobSchedule extracts the schedule + suspend status.
-func cronJobSchedule(c batchv1.CronJob) string {
-	suspend := "False"
-	if c.Spec.Suspend != nil && *c.Spec.Suspend {
-		suspend = "True"
-	}
-	return fmt.Sprintf("%s  SUSPEND=%s", c.Spec.Schedule, suspend)
 }
 
 // lastScheduleTime renders the last schedule time of a CronJob.

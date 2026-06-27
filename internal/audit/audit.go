@@ -51,7 +51,7 @@ func (l *Logger) Begin(ctx context.Context, tool string, verb security.Verb) (co
 		if err != nil {
 			rec.Error = err.Error()
 		}
-		l.emit(ctx, rec)
+		l.emit(rec)
 	}
 }
 
@@ -84,7 +84,7 @@ func AttachArgs(ctx context.Context, args map[string]any) {
 	}
 }
 
-func (l *Logger) emit(ctx context.Context, rec *Record) {
+func (l *Logger) emit(rec *Record) {
 	attrs := []any{
 		slog.String("tool", rec.Tool),
 		slog.String("verb", string(rec.Verb)),
