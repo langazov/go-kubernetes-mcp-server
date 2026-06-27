@@ -135,3 +135,53 @@ func TestListPVCs(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
+
+func TestListSecretsAllNamespacesBlockedByAllowlist(t *testing.T) {
+	tk := testutil.NewToolkit(t,
+		testutil.WithConfig(func(c *config.Config) { c.Namespaces = []string{"team-a"} }),
+		testutil.WithObjs(&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: "team-b"},
+			Data:       map[string][]byte{"password": []byte("x")},
+		}),
+	)
+	res, err := listSecrets(tk)(context.Background(), tools.ListArgs{AllNamespaces: true})
+	if err != nil {
+		t.Fatalf("listSecrets: %v", err)
+	}
+	if !testutil.IsError(res) || !strings.Contains(testutil.TextOf(res), "allowlist") {
+		t.Fatalf("all_namespaces must be blocked when an allowlist is configured:\n%s", testutil.TextOf(res))
+	}
+}
+
+func TestListSecretsBlockedOutsideAllowlist(t *testing.T) {
+	tk := testutil.NewToolkit(t,
+		testutil.WithConfig(func(c *config.Config) { c.Namespaces = []string{"team-a"} }),
+		testutil.WithObjs(&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: "team-b"},
+			Data:       map[string][]byte{"password": []byte("x")},
+		}),
+	)
+	res, err := listSecrets(tk)(context.Background(), tools.ListArgs{Namespace: "team-b"})
+	if err != nil {
+		t.Fatalf("listSecrets: %v", err)
+	}
+	if !testutil.IsError(res) {
+		t.Fatalf("listing a namespace outside the allowlist must be blocked:\n%s", testutil.TextOf(res))
+	}
+}
+
+func TestGetSecretKubeSystemBlocked(t *testing.T) {
+	tk := testutil.NewToolkit(t,
+		testutil.WithObjs(&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "admin", Namespace: "kube-system"},
+			Data:       map[string][]byte{"token": []byte("x")},
+		}),
+	)
+	res, err := getSecret(tk)(context.Background(), secretArgs{Name: "admin", Namespace: "kube-system"})
+	if err != nil {
+		t.Fatalf("getSecret: %v", err)
+	}
+	if !testutil.IsError(res) || !strings.Contains(testutil.TextOf(res), "privileged") {
+		t.Fatalf("kube-system secret access must require --allow-privileged-targets:\n%s", testutil.TextOf(res))
+	}
+}

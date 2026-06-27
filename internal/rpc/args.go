@@ -61,6 +61,19 @@ func ValidateLabelSelector(sel string) error {
 	return nil
 }
 
+// ValidateSelectorToken rejects selector metacharacters in a value that will be
+// interpolated into a Kubernetes field selector (e.g. an involved-object kind or
+// name), preventing a caller from injecting extra selector clauses.
+func ValidateSelectorToken(v string) error {
+	if v == "" {
+		return nil
+	}
+	if strings.ContainsAny(v, ",=!<>()\"'\\ \t\n\r") {
+		return fmt.Errorf("value %q contains characters that are not allowed in a selector token", v)
+	}
+	return nil
+}
+
 // PrivilegedNamespaces are namespaces hosting control-plane components that
 // require explicit opt-in to touch.
 var PrivilegedNamespaces = map[string]bool{

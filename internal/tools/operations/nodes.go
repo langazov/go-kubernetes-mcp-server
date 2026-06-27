@@ -82,12 +82,13 @@ func drainNode(tk *tools.Toolkit) tools.ToolFunc[drainArgs] {
 
 		timeout := 2 * time.Minute
 		if a.Timeout != "" {
-			if d, err := time.ParseDuration(a.Timeout); err == nil {
+			if d, err := time.ParseDuration(a.Timeout); err == nil && d > 0 {
 				timeout = d
 			}
 		}
-		if timeout > tk.Cfg.DefaultTimeout {
-			// Use a dedicated deadline for the (potentially long) drain.
+		// Apply the requested drain budget. The call context from Wrap is itself
+		// bounded by --default-timeout, which is the effective maximum.
+		if timeout > 0 {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, timeout)
 			defer cancel()

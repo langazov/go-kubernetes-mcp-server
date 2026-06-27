@@ -36,7 +36,7 @@ func diagnosePod(tk *tools.Toolkit) tools.ToolFunc[diagnosePodArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
-		if err := tk.Policy.CheckNamespace(ns); err != nil {
+		if err := tk.CheckScope(ns, false); err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		audit.Attach(ctx, "Pod", ns, a.Name, false)

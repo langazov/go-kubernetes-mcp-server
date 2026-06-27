@@ -43,7 +43,7 @@ func Register(tk *tools.Toolkit, s *mcp.Server) int {
 
 func listConfigMaps(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
@@ -66,6 +66,9 @@ func getConfigMap(tk *tools.Toolkit) tools.ToolFunc[tools.NamespaceNameArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
+		if err := tk.CheckScope(ns, false); err != nil {
+			return rpc.ErrorResult("%v", err), nil
+		}
 		audit.Attach(ctx, "ConfigMap", ns, a.Name, false)
 		cm, err := tk.Clients.Core.CoreV1().ConfigMaps(ns).Get(ctx, a.Name, metav1.GetOptions{})
 		if err != nil {
@@ -77,7 +80,7 @@ func getConfigMap(tk *tools.Toolkit) tools.ToolFunc[tools.NamespaceNameArgs] {
 
 func listSecrets(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
@@ -106,7 +109,7 @@ func getSecret(tk *tools.Toolkit) tools.ToolFunc[secretArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
-		if err := tk.Policy.CheckNamespace(ns); err != nil {
+		if err := tk.CheckScope(ns, false); err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		if err := tk.Policy.CheckSecretReveal(a.Reveal); err != nil {
@@ -123,7 +126,7 @@ func getSecret(tk *tools.Toolkit) tools.ToolFunc[secretArgs] {
 
 func listPVCs(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}

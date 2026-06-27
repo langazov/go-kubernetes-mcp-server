@@ -192,14 +192,26 @@ type apiResourceArgs struct {
 
 func listEvents(tk *tools.Toolkit) tools.ToolFunc[eventsArgs] {
 	return func(ctx context.Context, a eventsArgs) (*mcp.CallToolResult, error) {
+		if err := rpc.ValidateSelectorToken(a.Kind); err != nil {
+			return rpc.ErrorResult("%v", err), nil
+		}
+		if err := rpc.ValidateSelectorToken(a.Name); err != nil {
+			return rpc.ErrorResult("%v", err), nil
+		}
 		ns := tools.ResolveNS(a.Namespace)
 		if a.AllNamespaces {
 			ns = ""
 		}
+		if ns == "" {
+			if len(tk.Policy.Namespaces) > 0 {
+				return rpc.ErrorResult("listing all namespaces is not permitted while a namespace allowlist is configured"), nil
+			}
+		} else if err := tk.CheckScope(ns, false); err != nil {
+			return rpc.ErrorResult("%v", err), nil
+		}
 		audit.Attach(ctx, "Event", ns, "", false)
 		opts := metav1.ListOptions{Limit: a.Limit}
 		if a.Kind != "" && a.Name != "" {
-			// Build a field selector for involved object.
 			opts.FieldSelector = fmt.Sprintf("involvedObject.kind=%s,involvedObject.name=%s", a.Kind, a.Name)
 		} else if a.FieldSelector != "" {
 			opts.FieldSelector = a.FieldSelector

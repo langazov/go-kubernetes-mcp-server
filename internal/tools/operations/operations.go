@@ -126,6 +126,9 @@ func applyManifest(tk *tools.Toolkit) tools.ToolFunc[applyArgs] {
 			fm = "k8s-mcp"
 		}
 
+		if len(a.Manifest) > tk.Cfg.MaxManifestBytes {
+			return rpc.ErrorResult("manifest is %d bytes, exceeds --max-manifest-bytes (%d)", len(a.Manifest), tk.Cfg.MaxManifestBytes), nil
+		}
 		objs, err := decodeManifests(a.Manifest)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
@@ -133,6 +136,10 @@ func applyManifest(tk *tools.Toolkit) tools.ToolFunc[applyArgs] {
 		if len(objs) == 0 {
 			return rpc.ErrorResult("manifest contained no documents"), nil
 		}
+		audit.AttachArgs(ctx, map[string]any{
+			"documents":      len(objs),
+			"manifest_bytes": len(a.Manifest),
+		})
 
 		defaultNS := tools.ResolveNS(a.Namespace)
 		var b strings.Builder
@@ -229,6 +236,7 @@ func patch(tk *tools.Toolkit) tools.ToolFunc[patchArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		audit.Attach(ctx, a.Kind, ns, a.Name, a.DryRun)
+		audit.AttachArgs(ctx, map[string]any{"patch_type": a.PatchType, "patch_bytes": len(a.Patch)})
 
 		opts := metav1.PatchOptions{}
 		if a.DryRun {
@@ -298,7 +306,7 @@ func decodeManifests(raw string) ([]unstructured.Unstructured, error) {
 			if err.Error() == "EOF" || strings.Contains(err.Error(), "EOF") {
 				break
 			}
-			break
+			return nil, fmt.Errorf("document %d: %w", len(out)+1, err)
 		}
 		if len(obj.Object) == 0 {
 			continue

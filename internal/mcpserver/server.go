@@ -5,9 +5,14 @@ package mcpserver
 
 import (
 	"context"
+	"crypto/subtle"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -41,6 +46,7 @@ type App struct {
 	Log         *slog.Logger
 	Audit       *audit.Logger
 	ClusterName string
+	tk          *tools.Toolkit
 	toolCount   int
 }
 
@@ -54,6 +60,7 @@ func Build(cfg *config.Config, clients *kube.Clients, policy *security.Policy,
 		Audit:   auditor,
 		Log:     logger,
 	}
+	tk.InitSemaphore(cfg.MaxConcurrentCalls)
 
 	srv := mcp.NewServer(&mcp.Implementation{
 		Name:       ServerName,
@@ -76,6 +83,7 @@ func Build(cfg *config.Config, clients *kube.Clients, policy *security.Policy,
 		Log:         logger,
 		Audit:       auditor,
 		ClusterName: clusterName,
+		tk:          tk,
 	}
 
 	app.toolCount = app.register(tk, srv)
@@ -117,6 +125,7 @@ func (a *App) register(tk *tools.Toolkit, s *mcp.Server) int {
 // Run starts the server on the configured transport. It blocks until the context
 // is cancelled or the transport errors.
 func (a *App) Run(ctx context.Context) error {
+	a.tk.ShutdownCtx = ctx
 	switch a.Config.Transport {
 	case "http":
 		return a.runHTTP(ctx)
@@ -133,23 +142,43 @@ func (a *App) runStdio(ctx context.Context) error {
 func (a *App) runHTTP(ctx context.Context) error {
 	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return a.Server }, nil)
 	mux := http.NewServeMux()
-	mux.Handle(a.Config.Endpoint, handler)
+
+	token := a.Config.ResolvedAuthToken()
+	auth := bearerAuth(token)
+	mux.Handle(a.Config.Endpoint, auth(handler))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
 	a.registerOAuthMetadata(mux)
 
-	addr := a.Config.Listen
+	tlsCfg, err := a.tlsConfig()
+	if err != nil {
+		return err
+	}
+	serveTLS := tlsCfg != nil && a.Config.TLSCert != "" && a.Config.TLSKey != ""
 	srv := &http.Server{
-		Addr:              addr,
-		Handler:           withCORS(mux, a.Config.CORSOrigins),
+		Addr:              a.Config.Listen,
+		Handler:           withCORS(mux, a.Config.CORSOrigins, token != ""),
 		ReadHeaderTimeout: 10 * time.Second,
+		TLSConfig:         tlsCfg,
 	}
 
-	a.Log.Info("starting MCP server (http transport)", "listen", addr, "endpoint", a.Config.Endpoint)
+	a.Log.Info("starting MCP server (http transport)",
+		"listen", a.Config.Listen, "endpoint", a.Config.Endpoint,
+		"tls", serveTLS, "mtls", a.Config.TLSClientCA != "", "auth", token != "")
+	if !serveTLS && !a.Config.IsLoopbackListen() {
+		a.Log.Warn("HTTP transport is running in PLAINTEXT on a non-loopback address; use TLS/mTLS for production")
+	}
+
 	errCh := make(chan error, 1)
-	go func() { errCh <- srv.ListenAndServe() }()
+	go func() {
+		if serveTLS {
+			errCh <- srv.ListenAndServeTLS(a.Config.TLSCert, a.Config.TLSKey)
+		} else {
+			errCh <- srv.ListenAndServe()
+		}
+	}()
 
 	select {
 	case <-ctx.Done():
@@ -161,6 +190,55 @@ func (a *App) runHTTP(ctx context.Context) error {
 			return nil
 		}
 		return fmt.Errorf("http server: %w", err)
+	}
+}
+
+// tlsConfig builds the http.Server.TLSConfig: client-cert verification (mTLS)
+// when --tls-client-ca is set. Returns nil when TLS is not configured.
+func (a *App) tlsConfig() (*tls.Config, error) {
+	if a.Config.TLSClientCA == "" {
+		return nil, nil
+	}
+	pem, err := os.ReadFile(a.Config.TLSClientCA)
+	if err != nil {
+		return nil, fmt.Errorf("read tls-client-ca: %w", err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pem) {
+		return nil, fmt.Errorf("--tls-client-ca did not contain any valid certificates")
+	}
+	return &tls.Config{
+		ClientCAs:  pool,
+		ClientAuth: tls.RequireAndVerifyClientCert,
+		MinVersion: tls.VersionTLS12,
+	}, nil
+}
+
+// bearerAuth wraps a handler with shared-secret bearer-token verification.
+// When token is empty the handler is returned unchanged.
+func bearerAuth(token string) func(http.Handler) http.Handler {
+	if token == "" {
+		return func(h http.Handler) http.Handler { return h }
+	}
+	expected := []byte(token)
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			u, p, ok := r.BasicAuth()
+			if ok {
+				_ = u
+				if subtle.ConstantTimeCompare([]byte(p), expected) == 1 {
+					h.ServeHTTP(w, r)
+					return
+				}
+			}
+			got := []byte(strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")))
+			if len(got) > 0 && subtle.ConstantTimeCompare(got, expected) == 1 {
+				h.ServeHTTP(w, r)
+				return
+			}
+			w.Header().Set("WWW-Authenticate", `Bearer realm="k8s-mcp"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		})
 	}
 }
 
@@ -188,7 +266,9 @@ func instructions(cfg *config.Config, p *security.Policy, cluster string) string
 
 // withCORS wraps a handler with permissive CORS for the given origins when any
 // are configured (browser-based MCP clients). Empty origins = no CORS headers.
-func withCORS(h http.Handler, origins []string) http.Handler {
+// The Authorization header is only advertised when bearer auth is enabled,
+// so the advertised header set matches what the server actually enforces.
+func withCORS(h http.Handler, origins []string, authEnabled bool) http.Handler {
 	if len(origins) == 0 {
 		return h
 	}
@@ -198,6 +278,11 @@ func withCORS(h http.Handler, origins []string) http.Handler {
 			allowAll = true
 		}
 	}
+	headers := []string{"Content-Type", "Accept", "Mcp-Session-Id", "Last-Event-ID"}
+	if authEnabled {
+		headers = append(headers, "Authorization")
+	}
+	allowHeaders := strings.Join(headers, ", ")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 		allowed := allowAll
@@ -215,7 +300,7 @@ func withCORS(h http.Handler, origins []string) http.Handler {
 				w.Header().Set("Vary", "Origin")
 			}
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, Mcp-Session-Id, Last-Event-ID")
+			w.Header().Set("Access-Control-Allow-Headers", allowHeaders)
 			w.Header().Set("Access-Control-Expose-Headers", "Mcp-Session-Id")
 		}
 		if r.Method == http.MethodOptions {

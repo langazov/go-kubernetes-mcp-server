@@ -13,14 +13,15 @@ import (
 
 // Policy captures the effective security posture of a running server.
 type Policy struct {
-	AllowWrites            bool
-	AllowDestructive       bool
-	AllowDebug             bool
-	AllowPrivilegedTargets bool
-	Namespaces             map[string]bool
-	RevealSecrets          bool
-	AllowedManifestKinds   map[string]bool
-	ForbiddenImages        map[string]bool
+	AllowWrites                 bool
+	AllowDestructive            bool
+	AllowDebug                  bool
+	AllowPrivilegedTargets      bool
+	Namespaces                  map[string]bool
+	RevealSecrets               bool
+	AllowedManifestKinds        map[string]bool
+	ForbiddenImages             map[string]bool
+	AllowedDebugServiceAccounts map[string]bool
 }
 
 // FromConfig builds a Policy from configuration. It applies the same
@@ -28,14 +29,15 @@ type Policy struct {
 // correct even if Validate was not called.
 func FromConfig(cfg config.Config) *Policy {
 	p := &Policy{
-		AllowWrites:            cfg.AllowWrites || cfg.AllowDestructive,
-		AllowDestructive:       cfg.AllowDestructive,
-		AllowDebug:             cfg.AllowDebug,
-		AllowPrivilegedTargets: cfg.AllowPrivilegedTargets,
-		RevealSecrets:          cfg.RevealSecrets,
-		Namespaces:             map[string]bool{},
-		AllowedManifestKinds:   map[string]bool{},
-		ForbiddenImages:        map[string]bool{},
+		AllowWrites:                 cfg.AllowWrites || cfg.AllowDestructive,
+		AllowDestructive:            cfg.AllowDestructive,
+		AllowDebug:                  cfg.AllowDebug,
+		AllowPrivilegedTargets:      cfg.AllowPrivilegedTargets,
+		RevealSecrets:               cfg.RevealSecrets,
+		Namespaces:                  map[string]bool{},
+		AllowedManifestKinds:        map[string]bool{},
+		ForbiddenImages:             map[string]bool{},
+		AllowedDebugServiceAccounts: map[string]bool{},
 	}
 	for _, n := range cfg.Namespaces {
 		p.Namespaces[n] = true
@@ -45,6 +47,9 @@ func FromConfig(cfg config.Config) *Policy {
 	}
 	for _, img := range cfg.ForbiddenImages {
 		p.ForbiddenImages[img] = true
+	}
+	for _, sa := range cfg.AllowedDebugServiceAccounts {
+		p.AllowedDebugServiceAccounts[sa] = true
 	}
 	return p
 }
@@ -133,6 +138,26 @@ func (p *Policy) CheckManifestKind(gvk string) error {
 func (p *Policy) CheckImage(image string) error {
 	if p.ForbiddenImages[image] {
 		return fmt.Errorf("image %q is forbidden by server policy", image)
+	}
+	return nil
+}
+
+// CheckDebugServiceAccount gates which ServiceAccount a debug pod may use. With
+// no allowlist configured only "default" is permitted; otherwise the account
+// must be in the configured list. This prevents a client from spawning a debug
+// pod bound to a highly-privileged service account.
+func (p *Policy) CheckDebugServiceAccount(sa string) error {
+	if sa == "" {
+		sa = "default"
+	}
+	if len(p.AllowedDebugServiceAccounts) == 0 {
+		if sa != "default" {
+			return fmt.Errorf("debug pod service account %q is not permitted (only %q allowed; configure --allowed-debug-service-accounts)", sa, "default")
+		}
+		return nil
+	}
+	if !p.AllowedDebugServiceAccounts[sa] {
+		return fmt.Errorf("debug pod service account %q is not in the allowed list", sa)
 	}
 	return nil
 }

@@ -53,7 +53,7 @@ func tk2NewRead(name, desc string) *mcp.Tool { return tools.NewReadTool(name, de
 
 func listPods(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
@@ -77,7 +77,7 @@ func getPod(tk *tools.Toolkit) tools.ToolFunc[tools.NamespaceNameArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
-		if err := tk.Policy.CheckNamespace(ns); err != nil {
+		if err := tk.CheckScope(ns, false); err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		audit.Attach(ctx, "Pod", ns, a.Name, false)
@@ -91,7 +91,7 @@ func getPod(tk *tools.Toolkit) tools.ToolFunc[tools.NamespaceNameArgs] {
 
 func listDeployments(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
@@ -114,7 +114,7 @@ func getDeployment(tk *tools.Toolkit) tools.ToolFunc[tools.NamespaceNameArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
-		if err := tk.Policy.CheckNamespace(ns); err != nil {
+		if err := tk.CheckScope(ns, false); err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		audit.Attach(ctx, "Deployment", ns, a.Name, false)
@@ -128,7 +128,7 @@ func getDeployment(tk *tools.Toolkit) tools.ToolFunc[tools.NamespaceNameArgs] {
 
 func listStatefulSets(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
@@ -151,7 +151,7 @@ func listStatefulSets(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 
 func listDaemonSets(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
@@ -174,7 +174,7 @@ func listDaemonSets(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 
 func listReplicaSets(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
@@ -197,7 +197,7 @@ func listReplicaSets(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 
 func listJobs(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
@@ -216,7 +216,7 @@ func listJobs(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 
 func listCronJobs(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}

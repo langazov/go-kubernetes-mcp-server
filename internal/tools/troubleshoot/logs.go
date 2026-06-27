@@ -41,7 +41,7 @@ func getLogs(tk *tools.Toolkit) tools.ToolFunc[logArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
-		if err := tk.Policy.CheckNamespace(ns); err != nil {
+		if err := tk.CheckScope(ns, false); err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		audit.Attach(ctx, "Pod", ns, a.Pod, false)

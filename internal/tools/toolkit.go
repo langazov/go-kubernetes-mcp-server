@@ -26,6 +26,22 @@ type Toolkit struct {
 	Cfg     *config.Config
 	Audit   *audit.Logger
 	Log     *slog.Logger
+
+	// ShutdownCtx is cancelled when the server is stopping. Long-lived
+	// background work (debug-pod cleanup, port-forward teardown) must derive
+	// from it so it does not outlive the server.
+	ShutdownCtx context.Context
+
+	// sem caps the number of concurrently in-flight tool calls (DoS / fan-out
+	// bound). nil means unlimited.
+	sem chan struct{}
+}
+
+// InitSemaphore creates the in-flight call cap. Called once during server Build.
+func (tk *Toolkit) InitSemaphore(n int) {
+	if n > 0 {
+		tk.sem = make(chan struct{}, n)
+	}
 }
 
 // toolFunc is the signature our handlers implement. Dependencies arrive via the
@@ -48,6 +64,16 @@ func Wrap[In any](tk *Toolkit, name string, verb security.Verb, f toolFunc[In]) 
 		ctx, finish := tk.Audit.Begin(ctx, name, verb)
 		ctx, cancel := context.WithTimeout(ctx, tk.Cfg.DefaultTimeout)
 		defer cancel()
+
+		if tk.sem != nil {
+			select {
+			case tk.sem <- struct{}{}:
+				defer func() { <-tk.sem }()
+			case <-ctx.Done():
+				finish(ctx.Err())
+				return rpc.ErrorResult("server busy, try again: %v", ctx.Err()), nil, nil
+			}
+		}
 
 		defer func() {
 			if r := recover(); r != nil {

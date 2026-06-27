@@ -37,10 +37,14 @@ func execCommand(tk *tools.Toolkit) tools.ToolFunc[execArgs] {
 			return rpc.ErrorResult("command is required (a non-empty array)"), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
-		if err := tk.Policy.CheckNamespace(ns); err != nil {
+		if err := tk.CheckScope(ns, false); err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		audit.Attach(ctx, "Pod", ns, a.Pod, false)
+		audit.AttachArgs(ctx, map[string]any{
+			"command":   strings.Join(a.Command, " "),
+			"container": a.Container,
+		})
 
 		// Apply an exec-specific timeout if provided (it overrides the call
 		// deadline from Wrap, which is the server default-timeout).

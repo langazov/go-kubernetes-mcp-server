@@ -3,6 +3,7 @@ package debug
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	corev1 "k8s.io/api/core/v1"
@@ -37,10 +38,11 @@ func addEphemeralContainer(tk *tools.Toolkit) tools.ToolFunc[ephemeralArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
-		if err := tk.Policy.CheckNamespace(ns); err != nil {
+		if err := tk.CheckScope(ns, false); err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		audit.Attach(ctx, "Pod", ns, a.Pod, false)
+		audit.AttachArgs(ctx, map[string]any{"image": a.Image, "target_container": a.TargetContainer})
 
 		pod, err := tk.Clients.Core.CoreV1().Pods(ns).Get(ctx, a.Pod, metav1.GetOptions{})
 		if err != nil {
@@ -101,7 +103,7 @@ func runDebugPod(tk *tools.Toolkit) tools.ToolFunc[runDebugPodArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
-		if err := tk.Policy.CheckNamespace(ns); err != nil {
+		if err := tk.CheckScope(ns, false); err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
 
@@ -109,7 +111,20 @@ func runDebugPod(tk *tools.Toolkit) tools.ToolFunc[runDebugPodArgs] {
 		if name == "" {
 			name = "debug-" + randSuffix()
 		}
+		sa := a.ServiceAccount
+		if sa == "" {
+			sa = "default"
+		}
+		if err := tk.Policy.CheckDebugServiceAccount(sa); err != nil {
+			return rpc.ErrorResult("%v", err), nil
+		}
 		audit.Attach(ctx, "Pod", ns, name, false)
+		audit.AttachArgs(ctx, map[string]any{
+			"image":           a.Image,
+			"service_account": sa,
+			"node":            a.Node,
+			"command":         strings.Join(a.Command, " "),
+		})
 
 		ttl := int64(600)
 		if a.Duration != "" {
@@ -120,10 +135,6 @@ func runDebugPod(tk *tools.Toolkit) tools.ToolFunc[runDebugPodArgs] {
 		command := a.Command
 		if len(command) == 0 {
 			command = []string{"sleep", fmt.Sprintf("%d", ttl)}
-		}
-		sa := a.ServiceAccount
-		if sa == "" {
-			sa = "default"
 		}
 
 		pod := &corev1.Pod{

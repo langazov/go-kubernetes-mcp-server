@@ -27,6 +27,7 @@ type Record struct {
 	Success   bool           `json:"success"`
 	Duration  time.Duration  `json:"duration_ms"`
 	Error     string         `json:"error,omitempty"`
+	Args      map[string]any `json:"args,omitempty"`
 	Extra     map[string]any `json:"-"`
 }
 
@@ -67,6 +68,22 @@ func Attach(ctx context.Context, kind, namespace, name string, dryRun bool) {
 	rec.DryRun = dryRun
 }
 
+// AttachArgs records a redacted summary of call arguments for forensic purposes
+// (e.g. the command run by exec_command, the image used by a debug pod). Never
+// pass secret payloads here. It is a no-op if no record is active.
+func AttachArgs(ctx context.Context, args map[string]any) {
+	rec, ok := ctx.Value(recordKey).(*Record)
+	if !ok {
+		return
+	}
+	if rec.Args == nil {
+		rec.Args = make(map[string]any, len(args))
+	}
+	for k, v := range args {
+		rec.Args[k] = v
+	}
+}
+
 func (l *Logger) emit(ctx context.Context, rec *Record) {
 	attrs := []any{
 		slog.String("tool", rec.Tool),
@@ -88,6 +105,9 @@ func (l *Logger) emit(ctx context.Context, rec *Record) {
 	}
 	if rec.Error != "" {
 		attrs = append(attrs, slog.String("error", rec.Error))
+	}
+	if len(rec.Args) > 0 {
+		attrs = append(attrs, slog.Any("args", rec.Args))
 	}
 	switch rec.Verb {
 	case security.VerbDestructive:

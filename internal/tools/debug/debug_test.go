@@ -104,3 +104,41 @@ func TestRunDebugPodCreates(t *testing.T) {
 		t.Errorf("debug pod not created: %v", err)
 	}
 }
+
+func TestRunDebugPodServiceAccountBlocked(t *testing.T) {
+	tk := testutil.NewToolkit(t, testutil.WithConfig(withDebug))
+	res, err := runDebugPod(tk)(context.Background(), runDebugPodArgs{Image: "busybox", Name: "dbg", ServiceAccount: "cluster-admin"})
+	if err != nil {
+		t.Fatalf("runDebugPod: %v", err)
+	}
+	if !testutil.IsError(res) || !strings.Contains(testutil.TextOf(res), "service account") {
+		t.Fatalf("a non-default service account must be blocked without --allowed-debug-service-accounts:\n%s", testutil.TextOf(res))
+	}
+}
+
+func TestRunDebugPodServiceAccountAllowlisted(t *testing.T) {
+	tk := testutil.NewToolkit(t, testutil.WithConfig(func(c *config.Config) {
+		c.AllowDebug = true
+		c.AllowedDebugServiceAccounts = []string{"toolbox"}
+	}))
+	res, err := runDebugPod(tk)(context.Background(), runDebugPodArgs{Image: "busybox", Name: "dbg2", ServiceAccount: "toolbox"})
+	if err != nil {
+		t.Fatalf("runDebugPod: %v", err)
+	}
+	if testutil.IsError(res) {
+		t.Fatalf("allowlisted service account should be permitted:\n%s", testutil.TextOf(res))
+	}
+}
+
+func TestExecKubeSystemBlocked(t *testing.T) {
+	tk := testutil.NewToolkit(t, testutil.WithConfig(withDebug),
+		testutil.WithObjs(&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "kube-system"}}),
+	)
+	res, err := execCommand(tk)(context.Background(), execArgs{Pod: "p", Namespace: "kube-system", Command: []string{"id"}})
+	if err != nil {
+		t.Fatalf("execCommand: %v", err)
+	}
+	if !testutil.IsError(res) || !strings.Contains(testutil.TextOf(res), "privileged") {
+		t.Fatalf("exec into kube-system must require --allow-privileged-targets:\n%s", testutil.TextOf(res))
+	}
+}

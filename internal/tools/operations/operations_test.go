@@ -15,6 +15,11 @@ import (
 
 func withWrites(c *config.Config) { c.AllowWrites = true }
 
+func withWritesAndPrivileged(c *config.Config) {
+	c.AllowWrites = true
+	c.AllowPrivilegedTargets = true
+}
+
 // ----- apply_manifest -----
 
 func TestApplyManifestDryRun(t *testing.T) {
@@ -138,7 +143,7 @@ func TestRolloutRestart(t *testing.T) {
 // ----- create_namespace / create_configmap / create_secret -----
 
 func TestCreateNamespace(t *testing.T) {
-	tk := testutil.NewToolkit(t, testutil.WithConfig(withWrites))
+	tk := testutil.NewToolkit(t, testutil.WithConfig(withWritesAndPrivileged))
 	res, err := createNamespace(tk)(context.Background(), createNamespaceArgs{Name: "team-x"})
 	if err != nil {
 		t.Fatalf("createNamespace: %v", err)
@@ -186,5 +191,47 @@ func TestLabel(t *testing.T) {
 	}
 	if testutil.IsError(res) {
 		t.Fatalf("label failed: %s", testutil.TextOf(res))
+	}
+}
+
+// ----- security regression tests -----
+
+func TestCreateNamespaceBlockedWithoutPrivileged(t *testing.T) {
+	tk := testutil.NewToolkit(t, testutil.WithConfig(withWrites))
+	res, err := createNamespace(tk)(context.Background(), createNamespaceArgs{Name: "team-y"})
+	if err != nil {
+		t.Fatalf("createNamespace: %v", err)
+	}
+	if !testutil.IsError(res) || !strings.Contains(testutil.TextOf(res), "privileged") {
+		t.Fatalf("create_namespace must require --allow-privileged-targets:\n%s", testutil.TextOf(res))
+	}
+}
+
+func TestApplyManifestMalformedDocErrors(t *testing.T) {
+	tk := testutil.NewToolkit(t, testutil.WithConfig(withWrites))
+	testutil.RegisterApplyReactor(testutil.ClientsFor(tk).Dynamic, "configmaps")
+	manifest := "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ok\n---\n::: not valid yaml :::\n"
+	res, err := applyManifest(tk)(context.Background(), applyArgs{Manifest: manifest})
+	if err != nil {
+		t.Fatalf("applyManifest: %v", err)
+	}
+	if !testutil.IsError(res) {
+		t.Fatalf("malformed manifest document must surface an error, not succeed:\n%s", testutil.TextOf(res))
+	}
+}
+
+func TestApplyManifestSizeCap(t *testing.T) {
+	tk := testutil.NewToolkit(t, testutil.WithConfig(func(c *config.Config) {
+		c.AllowWrites = true
+		c.MaxManifestBytes = 16
+	}))
+	res, err := applyManifest(tk)(context.Background(), applyArgs{
+		Manifest: "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: too-big\n",
+	})
+	if err != nil {
+		t.Fatalf("applyManifest: %v", err)
+	}
+	if !testutil.IsError(res) || !strings.Contains(testutil.TextOf(res), "max-manifest-bytes") {
+		t.Fatalf("oversized manifest must be rejected:\n%s", testutil.TextOf(res))
 	}
 }

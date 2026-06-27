@@ -5,6 +5,19 @@ import (
 	"testing"
 )
 
+func TestValidateSelectorToken(t *testing.T) {
+	for _, bad := range []string{"a,b", "x=y", "a b", "a,b=1", "a\"b"} {
+		if err := ValidateSelectorToken(bad); err == nil {
+			t.Errorf("expected rejection for selector token %q", bad)
+		}
+	}
+	for _, ok := range []string{"", "Pod", "my-pod-1", "PersistentVolumeClaim"} {
+		if err := ValidateSelectorToken(ok); err != nil {
+			t.Errorf("expected acceptance for selector token %q: %v", ok, err)
+		}
+	}
+}
+
 func TestTruncateText(t *testing.T) {
 	if got := TruncateText("hello", 100); got != "hello" {
 		t.Errorf("short string should be unchanged, got %q", got)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"sort"
 	"testing"
 
@@ -138,4 +140,50 @@ func contains(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+func TestBearerAuthRejectsAndAccepts(t *testing.T) {
+	const token = "topsecret"
+	srv := httptest.NewServer(bearerAuth(token)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})))
+	defer srv.Close()
+
+	// No credentials -> 401.
+	if code := httpStatus(srv.Client(), "GET", srv.URL, ""); code != http.StatusUnauthorized {
+		t.Fatalf("missing token: got %d, want 401", code)
+	}
+	// Wrong token -> 401.
+	if code := httpStatus(srv.Client(), "GET", srv.URL, "Bearer nope"); code != http.StatusUnauthorized {
+		t.Fatalf("bad token: got %d, want 401", code)
+	}
+	// Correct token -> 200.
+	if code := httpStatus(srv.Client(), "GET", srv.URL, "Bearer "+token); code != http.StatusOK {
+		t.Fatalf("good token: got %d, want 200", code)
+	}
+}
+
+func TestBearerAuthDisabledWhenNoToken(t *testing.T) {
+	h := bearerAuth("")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	srv := httptest.NewServer(h)
+	defer srv.Close()
+	if code := httpStatus(srv.Client(), "GET", srv.URL, ""); code != http.StatusOK {
+		t.Fatalf("no token configured: request should pass, got %d", code)
+	}
+}
+
+func httpStatus(client *http.Client, method, url, authHeader string) int {
+	req, _ := http.NewRequest(method, url, nil)
+	if authHeader != "" {
+		req.Header.Set("Authorization", authHeader)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode
 }

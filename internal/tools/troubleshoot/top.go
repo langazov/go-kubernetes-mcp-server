@@ -56,6 +56,13 @@ func topPods(tk *tools.Toolkit) tools.ToolFunc[topArgs] {
 		if !a.AllNamespaces {
 			ns = tools.ResolveNS(a.Namespace)
 		}
+		if ns == "" {
+			if len(tk.Policy.Namespaces) > 0 {
+				return rpc.ErrorResult("listing all namespaces is not permitted while a namespace allowlist is configured"), nil
+			}
+		} else if err := tk.CheckScope(ns, false); err != nil {
+			return rpc.ErrorResult("%v", err), nil
+		}
 		list, err := tk.Clients.Metrics.MetricsV1beta1().PodMetricses(ns).List(ctx, metav1.ListOptions{LabelSelector: a.Selector})
 		if err != nil {
 			return rpc.ErrorResult("metrics unavailable (is metrics-server installed?): %v", err), nil

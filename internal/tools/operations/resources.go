@@ -31,6 +31,9 @@ func createNamespace(tk *tools.Toolkit) tools.ToolFunc[createNamespaceArgs] {
 		if err := rpc.ValidateName(a.Name); err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
+		if err := tk.Policy.CheckTarget("", true); err != nil {
+			return rpc.ErrorResult("%v", err), nil
+		}
 		audit.Attach(ctx, "Namespace", "", a.Name, a.DryRun)
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: a.Name, Labels: a.Labels},

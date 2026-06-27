@@ -30,6 +30,44 @@ func ResolveList(a ListArgs) (string, metav1.ListOptions, error) {
 	return ns, opts, nil
 }
 
+// ResolveList enforces server policy for a namespaced list. It refuses a
+// cluster-wide list while a namespace allowlist is configured (such a list
+// cannot be scoped to the allowlisted subset) and applies the privileged-target
+// and namespace-allowlist guards to a specific namespace. Use for every list of
+// namespaced resources; cluster-scoped lists (nodes, namespaces, ...) should use
+// the free ResolveList function and check CheckScope with clusterScoped=true.
+func (tk *Toolkit) ResolveList(a ListArgs) (string, metav1.ListOptions, error) {
+	ns, opts, err := ResolveList(a)
+	if err != nil {
+		return "", metav1.ListOptions{}, err
+	}
+	if ns == "" {
+		if len(tk.Policy.Namespaces) > 0 {
+			return "", metav1.ListOptions{}, fmt.Errorf("listing all namespaces is not permitted while a namespace allowlist is configured")
+		}
+		return ns, opts, nil
+	}
+	if err := tk.CheckScope(ns, false); err != nil {
+		return "", metav1.ListOptions{}, err
+	}
+	return ns, opts, nil
+}
+
+// CheckScope enforces both the privileged-target guard and the namespace
+// allowlist for a target. Pass clusterScoped=true for resources that are not
+// namespaced (nodes, namespaces, PVs, clusterroles, ...).
+func (tk *Toolkit) CheckScope(ns string, clusterScoped bool) error {
+	if err := tk.Policy.CheckTarget(ns, clusterScoped); err != nil {
+		return err
+	}
+	if !clusterScoped && ns != "" {
+		if err := tk.Policy.CheckNamespace(ns); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func validateSelector(sel string) error {
 	if strings.ContainsAny(sel, "\n\r") {
 		return fmt.Errorf("invalid selector: must not contain newlines")

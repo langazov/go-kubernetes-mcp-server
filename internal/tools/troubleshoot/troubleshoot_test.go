@@ -168,3 +168,50 @@ func podWithLogs(name, ns string) *corev1.Pod {
 		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "app:v1"}}},
 	}
 }
+
+func TestDescribeSecretMasksValues(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "admin-creds", Namespace: "default"},
+		Type:       corev1.SecretTypeOpaque,
+		Data:       map[string][]byte{"token": []byte("SUPERSECRETTOKEN")},
+	}
+	tk := testutil.NewToolkit(t,
+		testutil.WithObjs(secret),
+		testutil.WithDynamicObjs(secret),
+	)
+	res, err := describe(tk)(context.Background(), describeArgs{Kind: "Secret", APIVersion: "v1", Namespace: "default", Name: "admin-creds"})
+	if err != nil {
+		t.Fatalf("describe: %v", err)
+	}
+	if testutil.IsError(res) {
+		t.Fatalf("describe secret failed: %s", testutil.TextOf(res))
+	}
+	out := testutil.TextOf(res)
+	if strings.Contains(out, "SUPERSECRETTOKEN") {
+		t.Errorf("describe must not leak plaintext secret values:\n%s", out)
+	}
+	if strings.Contains(out, "U1VQRVJTRUNSRVRUT0tFTg==") {
+		t.Errorf("describe must not leak raw base64 secret values:\n%s", out)
+	}
+	if !strings.Contains(out, "••••") {
+		t.Errorf("expected masked secret data:\n%s", out)
+	}
+}
+
+func TestDescribeSecretKubeSystemBlocked(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "admin", Namespace: "kube-system"},
+		Data:       map[string][]byte{"token": []byte("x")},
+	}
+	tk := testutil.NewToolkit(t,
+		testutil.WithObjs(secret),
+		testutil.WithDynamicObjs(secret),
+	)
+	res, err := describe(tk)(context.Background(), describeArgs{Kind: "Secret", APIVersion: "v1", Namespace: "kube-system", Name: "admin"})
+	if err != nil {
+		t.Fatalf("describe: %v", err)
+	}
+	if !testutil.IsError(res) || !strings.Contains(testutil.TextOf(res), "privileged") {
+		t.Fatalf("describing a kube-system resource must require --allow-privileged-targets:\n%s", testutil.TextOf(res))
+	}
+}

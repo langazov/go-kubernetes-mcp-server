@@ -2,6 +2,8 @@ package troubleshoot
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -40,7 +42,7 @@ func describe(tk *tools.Toolkit) tools.ToolFunc[describeArgs] {
 		ns := ""
 		if namespaced {
 			ns = tools.ResolveNS(a.Namespace)
-			if err := tk.Policy.CheckNamespace(ns); err != nil {
+			if err := tk.CheckScope(ns, false); err != nil {
 				return rpc.ErrorResult("%v", err), nil
 			}
 		} else if a.Namespace != "" {
@@ -119,7 +121,8 @@ func splitGV(gv string) (string, string) {
 }
 
 // cleanUnstructured strips noisy managed-by fields that bloat output but keeps
-// everything useful for debugging.
+// everything useful for debugging. Secret payloads are always masked so the
+// generic describe tool cannot be used to bypass get_secret masking.
 func cleanUnstructured(obj map[string]any) map[string]any {
 	if obj == nil {
 		return obj
@@ -127,6 +130,32 @@ func cleanUnstructured(obj map[string]any) map[string]any {
 	if md, ok := obj["metadata"].(map[string]any); ok {
 		delete(md, "managedFields")
 	}
-	// Drop the status field's raw bytes only if huge? Keep status — it's useful.
+	maskSecret(obj)
 	return obj
+}
+
+func maskSecret(obj map[string]any) {
+	kind, _ := obj["kind"].(string)
+	if !strings.EqualFold(kind, "Secret") {
+		return
+	}
+	if data, ok := obj["data"].(map[string]any); ok {
+		for k, v := range data {
+			if s, ok := v.(string); ok {
+				data[k] = "•••• (sha256:" + shortHash([]byte(s)) + ")"
+			}
+		}
+	}
+	if sd, ok := obj["stringData"].(map[string]any); ok {
+		for k, v := range sd {
+			if s, ok := v.(string); ok {
+				sd[k] = "•••• (sha256:" + shortHash([]byte(s)) + ")"
+			}
+		}
+	}
+}
+
+func shortHash(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])[:12]
 }

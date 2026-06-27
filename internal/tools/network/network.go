@@ -40,7 +40,7 @@ var read = security.VerbRead
 
 func listServices(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
@@ -63,6 +63,9 @@ func getService(tk *tools.Toolkit) tools.ToolFunc[tools.NamespaceNameArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
+		if err := tk.CheckScope(ns, false); err != nil {
+			return rpc.ErrorResult("%v", err), nil
+		}
 		audit.Attach(ctx, "Service", ns, a.Name, false)
 		svc, err := tk.Clients.Core.CoreV1().Services(ns).Get(ctx, a.Name, metav1.GetOptions{})
 		if err != nil {
@@ -80,6 +83,9 @@ func getEndpoints(tk *tools.Toolkit) tools.ToolFunc[tools.NamespaceNameArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
+		if err := tk.CheckScope(ns, false); err != nil {
+			return rpc.ErrorResult("%v", err), nil
+		}
 		audit.Attach(ctx, "Endpoints", ns, a.Name, false)
 		// Try EndpointSlices first (group discovery.networking.k8s.io).
 		slices, err := tk.Clients.Dynamic.Resource(endpointSliceGVR()).Namespace(ns).List(ctx, metav1.ListOptions{
@@ -98,7 +104,7 @@ func getEndpoints(tk *tools.Toolkit) tools.ToolFunc[tools.NamespaceNameArgs] {
 
 func listIngresses(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
@@ -117,7 +123,7 @@ func listIngresses(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 
 func listNetworkPolicies(tk *tools.Toolkit) tools.ToolFunc[tools.ListArgs] {
 	return func(ctx context.Context, a tools.ListArgs) (*mcp.CallToolResult, error) {
-		ns, opts, err := tools.ResolveList(a)
+		ns, opts, err := tk.ResolveList(a)
 		if err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}

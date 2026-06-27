@@ -38,7 +38,7 @@ func rolloutStatus(tk *tools.Toolkit) tools.ToolFunc[rolloutStatusArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
-		if err := tk.Policy.CheckNamespace(ns); err != nil {
+		if err := tk.CheckScope(ns, false); err != nil {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		kind := strings.ToLower(a.Kind)
@@ -122,6 +122,9 @@ func rolloutHistory(tk *tools.Toolkit) tools.ToolFunc[rolloutArgs] {
 			return rpc.ErrorResult("%v", err), nil
 		}
 		ns := tools.ResolveNS(a.Namespace)
+		if err := tk.CheckScope(ns, false); err != nil {
+			return rpc.ErrorResult("%v", err), nil
+		}
 		audit.Attach(ctx, "Deployment", ns, a.Name, false)
 		// History = ReplicaSets owned by the deployment, ordered by revision.
 		sets, err := tk.Clients.Core.AppsV1().ReplicaSets(ns).List(ctx, metav1.ListOptions{LabelSelector: ""})
