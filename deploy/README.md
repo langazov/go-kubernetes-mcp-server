@@ -12,7 +12,10 @@ kubectl apply -f deploy/deployment.yaml
 ```
 
 The server uses its mounted service-account token automatically (in-cluster
-config). A read-only `ClusterRole` is bound by default.
+config). A read-only `ClusterRole` is bound by default. The sample manifest
+binds to `:8080` with `--insecure-http` (the server otherwise refuses plaintext
+HTTP on a non-loopback address); swap that for `--tls-cert`/`--tls-key` and/or
+`--auth-token` for production.
 
 Connect a client to:
 

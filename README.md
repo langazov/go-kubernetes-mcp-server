@@ -3,8 +3,9 @@
 A production-ready [Model Context Protocol](https://modelcontextprotocol.io) server
 that gives AI agents and LLM applications full visibility into — and (opt-in)
 control over — a Kubernetes cluster: **manage** resources, **troubleshoot**
-problems, and **debug** applications. **37 read-only tools** by default, scaling
-to **54** with `--allow-destructive` (plus 4 debug tools behind `--allow-debug`).
+problems, and **debug** applications. **37 read-only tools** by default; **13
+mutating** with `--allow-writes`, **4 destructive** with `--allow-destructive`,
+and **4 debug** tools with `--allow-debug` (**58 total** when every flag is set).
 
 ## Status: production-ready
 
@@ -30,7 +31,7 @@ debug tools are not even registered unless you pass the corresponding flag.
 
 ## Features
 
-- **37 read tools** across core, workloads, troubleshoot, network, and configstore, plus **17 gated tools** for mutating/destructive operations and **4 debug tools** — up to **54** with `--allow-destructive`.
+- **37 read tools** across core, workloads, troubleshoot, network, and configstore, plus **13 mutating**, **4 destructive**, and **4 debug** tools (**58 total** with all flags).
   `list_pods`, `get_logs`, `describe` (any GVK incl. CRDs), `list_events`,
   `top_pods`/`top_nodes`, `rollout_status`/`rollout_history`, and an automated
   `diagnose_pod`/`diagnose_node` engine (CrashLoopBackOff, ImagePullBackOff,
@@ -122,14 +123,18 @@ desired flags.
 ### HTTP (shared / remote)
 
 ```bash
-./k8s-mcp-server --transport http --listen :8080 --endpoint /mcp --cors-origins https://app.example.com
+./k8s-mcp-server --transport http --listen 127.0.0.1:8080 --endpoint /mcp \
+  --tls-cert cert.pem --tls-key key.pem --auth-token "$TOKEN" \
+  --cors-origins https://app.example.com
 ```
 
-See [`deploy/`](deploy/) for an in-cluster Deployment with RBAC.
+For a non-loopback listener the server requires TLS and/or `--auth-token`
+(unless you pass `--insecure-http` to acknowledge the risk). See
+[`deploy/`](deploy/) for an in-cluster Deployment with RBAC.
 
 ## Available tools
 
-**54 tools total** (37 read-only always on; 13 mutating with `--allow-writes`; 4
+**58 tools total** (37 read-only always on; 13 mutating with `--allow-writes`; 4
 destructive with `--allow-destructive`; 4 debug with `--allow-debug`). Read-only
 tools are always on; mutating, destructive, and debug tools require their flag.
 
@@ -157,31 +162,58 @@ All flags have an `K8S_MCP_*` env equivalent (dashes → underscores).
 
 | Flag | Default | Description |
 |---|---|---|
-| `--kubeconfig` | in-cluster or `~/.kube/config` | kubeconfig path |
-| `--context` | current | named context |
+| **Cluster connection** |||
+| `--kubeconfig` | in-cluster or `~/.kube/config` | kubeconfig path (empty = in-cluster service account) |
+| `--context` | current | named kubeconfig context |
+| `--cluster-name` | auto-detected | friendly cluster name surfaced in `cluster_health` |
+| `--default-timeout` | `30s` | context deadline for API-server calls |
+| `--qps` / `--burst` | `50` / `100` | client-go rate limits |
+| **Transport** |||
 | `--transport` | `stdio` | `stdio` \| `http` |
-| `--listen` / `--endpoint` | `:8080` / `/mcp` | HTTP settings |
+| `--listen` / `--endpoint` | `127.0.0.1:8080` / `/mcp` | HTTP bind address and MCP path |
+| `--cors-origins` | none | allowed CORS origins (HTTP) |
+| `--tls-cert` / `--tls-key` | none | TLS cert/key (enables HTTPS) |
+| `--tls-client-ca` | none | CA bundle to require and verify client certs (mTLS) |
+| `--auth-token` / `--auth-token-file` | none | shared-secret bearer token required by the HTTP transport |
+| `--insecure-http` | `false` | allow plaintext unauthenticated HTTP on non-loopback (NOT recommended) |
+| `--oauth-authorization-servers` | none | OAuth auth-server URLs advertised at `/.well-known/oauth-protected-resource` (HTTP) |
+| `--oauth-scopes` | none | OAuth scopes this resource supports (e.g. `mcp:read,mcp:write`) |
+| **Security / blast radius** |||
 | `--allow-writes` | `false` | register mutating tools |
-| `--allow-destructive` | `false` | register destructive tools |
-| `--allow-debug` | `false` | register debug tools |
-| `--allow-privileged-targets` | `false` | permit `kube-system`/cluster-scoped |
+| `--allow-destructive` | `false` | register destructive tools (implies `--allow-writes`) |
+| `--allow-debug` | `false` | register exec/ephemeral/port-forward/debug-pod tools |
+| `--allow-privileged-targets` | `false` | permit ops on `kube-system` and cluster-scoped resources |
 | `--namespace` | all | namespace allowlist (repeatable) |
 | `--reveal-secrets` | `false` | allow per-call secret reveal |
-| `--oauth-authorization-servers` | none | OAuth auth-server URLs advertised at `/.well-known/oauth-protected-resource` (HTTP) |
-| `--otel-endpoint` | none | OTLP exporter URL for tracing |
+| `--allowed-manifest-kinds` | all | restrict `apply_manifest` to these GVKs (e.g. `Deployment.v1.apps`) |
+| `--forbidden-images` | none | block these images for `run_debug_pod`/ephemeral containers |
+| `--allowed-debug-service-accounts` | `default` only | service accounts `run_debug_pod` may use |
+| **Tooling** |||
+| `--enable-categories` | all | restrict to tool categories (core,workloads,troubleshoot,debug,network,configstore,operations) |
+| `--output-format` | `text` | default result rendering (`text` \| `json`) |
 | `--max-output-bytes` | `262144` | per-result truncation ceiling |
-| `--default-timeout` | `30s` | API-server call deadline |
+| `--max-log-lines` | `1000` | default tail line count for `get_logs` |
+| `--max-manifest-bytes` | `262144` | max accepted `apply_manifest` payload size |
+| `--max-concurrent-calls` | `16` | max in-flight tool calls (0 = unlimited) |
+| **Observability** |||
 | `--log-level` / `--log-format` | `info` / `json` | logging |
 | `--audit-path` | stderr | audit log destination |
+| `--otel-endpoint` | none | OTLP exporter URL for tracing |
 
 Run `k8s-mcp-server --help` for the full list.
 
 ## Development
 
 ```bash
-go test ./...          # unit tests (config, security, rpc, core tools)
-go vet ./...
+go build ./...              # build everything
+go vet ./...                # vet
+golangci-lint run ./...     # lint (v2; config in .golangci.yml)
+gofmt -w .                  # format
+go test ./...               # unit tests
+go test -race -cover ./...  # tests with race detector + coverage
 ```
+
+Logs go to **stderr** only — stdout is reserved for the stdio MCP transport.
 
 ## Status
 

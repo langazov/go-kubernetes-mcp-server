@@ -94,6 +94,11 @@ spec:
             - --transport=http
             - --listen=:8080
             - --endpoint=/mcp
+            # :8080 is non-loopback, so the HTTP exposure guard requires TLS
+            # and/or --auth-token. This sample trusts the cluster network and
+            # acknowledges the risk explicitly. For production, drop this flag
+            # and front the endpoint with mTLS / an OAuth proxy (see deploy/README.md).
+            - --insecure-http
             - --log-level=info
             # Mutating/destructive/debug tools are OFF by default.
             # Enable individually after binding an admin ClusterRole above:
